@@ -1,48 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { User, AuthState, LoginCredentials } from '../types/auth';
 
-// Mock user database
-const mockUsers: Record<string, { password: string; user: User }> = {
-  admin: {
-    password: 'admin123',
-    user: {
-      id: '1',
-      username: 'admin',
-      email: 'admin@amlguard.com',
-      role: 'admin',
-      firstName: 'System',
-      lastName: 'Administrator',
-      department: 'IT Security',
-      permissions: ['view_all', 'manage_users', 'export_data', 'system_config'],
-    },
-  },
-  analyst: {
-    password: 'analyst123',
-    user: {
-      id: '2',
-      username: 'analyst',
-      email: 'analyst@amlguard.com',
-      role: 'analyst',
-      firstName: 'Financial',
-      lastName: 'Analyst',
-      department: 'Compliance',
-      permissions: ['view_transactions', 'create_alerts', 'export_data'],
-    },
-  },
-  investigator: {
-    password: 'invest123',
-    user: {
-      id: '3',
-      username: 'investigator',
-      email: 'investigator@amlguard.com',
-      role: 'investigator',
-      firstName: 'AML',
-      lastName: 'Investigator',
-      department: 'Investigation',
-      permissions: ['view_transactions', 'manage_alerts', 'view_reports'],
-    },
-  },
-};
+const API_BASE_URL = 'http://localhost:8000/api/auth'; // Your Django backend URL
 
 export const useAuth = () => {
   const [authState, setAuthState] = useState<AuthState>({
@@ -52,40 +11,58 @@ export const useAuth = () => {
     error: null,
   });
 
+  // Log auth state changes
+  useEffect(() => {
+    console.log("Auth State Updated:", authState);
+  }, [authState]);
+
   const login = useCallback(async (credentials: LoginCredentials) => {
     setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const response = await fetch(`${API_BASE_URL}/login/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
 
-    const mockUser = mockUsers[credentials.username];
-    
-    if (!mockUser || mockUser.password !== credentials.password) {
+      const data = await response.json();
+      console.log("Login API Response:", response.status, data);
+
+      if (response.ok) {
+        const userWithLastLogin = {
+          ...data.user,
+          lastLogin: new Date().toISOString(),
+        };
+        setAuthState({
+          user: userWithLastLogin,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+        localStorage.setItem('aml_user', JSON.stringify(userWithLastLogin));
+        localStorage.setItem('aml_token', data.token);
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: data.error || 'Login failed',
+        }));
+      }
+    } catch (error: any) {
+      console.error("Login API Error:", error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
-        error: 'Invalid username or password. Please check your credentials and try again.',
+        error: error.message || 'Network error',
       }));
-      return;
     }
-
-    const userWithLastLogin = {
-      ...mockUser.user,
-      lastLogin: new Date().toISOString(),
-    };
-
-    setAuthState({
-      user: userWithLastLogin,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null,
-    });
-
-    // Store in localStorage for persistence
-    localStorage.setItem('aml_user', JSON.stringify(userWithLastLogin));
   }, []);
 
   const logout = useCallback(() => {
+    console.log("Logging out...");
     setAuthState({
       user: null,
       isAuthenticated: false,
@@ -93,24 +70,56 @@ export const useAuth = () => {
       error: null,
     });
     localStorage.removeItem('aml_user');
+    localStorage.removeItem('aml_token');
   }, []);
 
-  const checkAuthStatus = useCallback(() => {
+  const checkAuthStatus = useCallback(async () => {
+    console.log("Checking auth status...");
     const storedUser = localStorage.getItem('aml_user');
-    if (storedUser) {
+    const storedToken = localStorage.getItem('aml_token');
+
+    if (storedUser && storedToken) {
       try {
-        const user = JSON.parse(storedUser);
-        setAuthState({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
+        const response = await fetch(`${API_BASE_URL}/user/`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Token ${storedToken}`,
+          },
         });
+
+        const data = await response.json();
+        console.log("Check Auth API Response:", response.status, data);
+
+        if (response.ok) {
+          const user = data;
+          setAuthState({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } else {
+          console.log("Auth check failed, clearing local storage.");
+          localStorage.removeItem('aml_user');
+          localStorage.removeItem('aml_token');
+          setAuthState(prev => ({ ...prev, isAuthenticated: false, user: null }));
+        }
       } catch (error) {
+        console.error("Check Auth API Error:", error);
         localStorage.removeItem('aml_user');
+        localStorage.removeItem('aml_token');
+        setAuthState(prev => ({ ...prev, isAuthenticated: false, user: null }));
       }
+    } else {
+      console.log("No stored user or token, not authenticated.");
+      setAuthState(prev => ({ ...prev, isAuthenticated: false, user: null }));
     }
   }, []);
+
+  useEffect(() => {
+    checkAuthStatus();
+  }, [checkAuthStatus]);
 
   return {
     ...authState,

@@ -8,6 +8,7 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin, error, isLoading }) => {
+  console.log('Login component rendered');
   const [credentials, setCredentials] = useState({
     username: '',
     password: '',
