@@ -156,16 +156,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin, error, isLoading }) => {
             </div>
           </div>
         </div>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 bg-slate-800 bg-opacity-50 rounded-lg p-4 backdrop-blur-sm">
-          <h3 className="text-sm font-medium text-white mb-2">Demo Credentials</h3>
-          <div className="space-y-1 text-xs text-slate-300">
-            <p><span className="text-emerald-400">Admin:</span> admin / admin123</p>
-            <p><span className="text-blue-400">Analyst:</span> analyst / analyst123</p>
-            <p><span className="text-amber-400">Investigator:</span> investigator / invest123</p>
-          </div>
-        </div>
       </div>
     </div>
   );
